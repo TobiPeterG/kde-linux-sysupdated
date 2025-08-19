@@ -14,6 +14,7 @@ kde-linux-sysupdated:
 	go generate
 	go build -o kde-linux-sysupdated -v
 
-run: kde-linux-sysupdated
-	/usr/bin/systemd-socket-activate -l 0.0.0.0:8080 ./kde-linux-sysupdated
-
+install: kde-linux-sysupdated
+	install -Dm755 kde-linux-sysupdated ${DESTDIR}/usr/lib/kde-linux-sysupdated
+	install -Dm644 kde-linux-sysupdated.service ${DESTDIR}/usr/lib/systemd/system/kde-linux-sysupdated.service
+	install -Dm644 kde-linux-sysupdated.socket ${DESTDIR}/usr/lib/systemd/system/kde-linux-sysupdated.socket

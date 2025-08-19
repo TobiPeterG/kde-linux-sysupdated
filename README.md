@@ -21,8 +21,9 @@ Alternatively you can deploy go to your home https://go.dev/doc/install
 ```
 git clone https://invent.kde.org/sitter/kde-linux-sysupdated.git
 cd kde-linux-sysupdated
-make
-./kde-linux-sysupdated
+DESTDIR=~/kde make install
+sudo systemd-sysext refresh
+sudo systemctl enable --now kde-linux-sysupdated.socket
 # use regular update tooling
 ```
 

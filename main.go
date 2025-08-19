@@ -178,31 +178,8 @@ func main() {
 
 	if len(servers) == 0 {
 		log.Println("servers empty. adding manual server")
-
-		host := os.Getenv("HOST")
-		if len(host) <= 0 {
-			host = "localhost"
-		}
-		port := os.Getenv("PORT")
-		if len(port) <= 0 {
-			port = "3129"
-		}
-
-		server := &http.Server{
-			Addr:    host + ":" + port,
-			Handler: router,
-		}
-		go server.ListenAndServe()
-		servers = append(servers, server)
+		panic("no listeners found, please run with systemd socket activation or use `make run`")
 	}
-
-	addr := servers[0].Addr
-
-	os.MkdirAll("/run/sysupdate.d/50-root-x86-64-erofs.conf.d", 0755)
-	os.WriteFile("/run/sysupdate.d/50-root-x86-64-erofs.conf.d/00-default.conf",
-		fmt.Appendf(nil, "[Source]\nPath=http://%s/kde-linux\n", addr),
-		0644)
-	defer os.RemoveAll("/run/sysupdate.d/50-root-x86-64-erofs.conf.d")
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
