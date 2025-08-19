@@ -5,3 +5,13 @@ include:
   - project: sysadmin/ci-utilities
     file:
       - /gitlab-templates/reuse-lint.yml
+
+stages:
+  - validate
+  - build
+
+golang-latest:
+  stage: build
+  image: golang:latest
+  script:
+    - make
