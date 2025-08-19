@@ -6,7 +6,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -21,25 +20,10 @@ import (
 	"github.com/folbricht/desync"
 	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
-
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
-	docs "invent.kde.org/kde-linux/sysupdated.git/docs"
 )
 
-//go:generate swag init
 
-// sentry-go currently has no support for checkins so we  manually send a heartbeat instead
-// https://docs.sentry.io/product/crons/getting-started/http/#heartbeat
-func sentryHeartbeat() {
-	// Not implemented
-}
 
-func sentryTransactor() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		span := sentry.StartSpan(c, c.Request.Method, sentry.WithTransactionName(c.Request.URL.Path))
-		c.Next()
-		span.Finish()
 	}
 }
 
@@ -48,32 +32,16 @@ func main() {
 
 	err := sentry.Init(sentry.ClientOptions{
 		Dsn: "",
-		// Set TracesSampleRate to 1.0 to capture 100%
-		// of transactions for performance monitoring.
-		// We recommend adjusting this value in production,
-		TracesSampleRate: 0.25,
 	})
 	if err != nil {
 		log.Fatalf("sentry.Init: %s", err)
 	}
 	defer sentry.Flush(2 * time.Second)
 
-	heartbeat := time.NewTicker(30 * time.Minute)
-	go func() {
-		for range heartbeat.C {
-			sentryHeartbeat()
-		}
-	}()
-
-	docs.SwaggerInfo.BasePath = "/"
-
 	log.Println("Ready to rumble...")
 	router := gin.Default(func(e *gin.Engine) {
 		e.ContextWithFallback = true
 	})
-	// router.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
-	// router.Use(sentryTransactor())
-	router.SetTrustedProxies([]string{"127.0.0.1"})
 
 	router.GET("/kde-linux/*file", func(c *gin.Context) {
 		file := filepath.Base(c.Param("file"))
@@ -154,14 +122,6 @@ func main() {
 		c.DataFromReader(http.StatusOK, remoteIndex.Length(), "application/octet-stream",
 			io.MultiReader(readers...), map[string]string{})
 	})
-	router.GET("/", func(c *gin.Context) {
-		c.Redirect(http.StatusFound, "/swagger/index.html")
-	})
-	router.GET("/doc", func(c *gin.Context) {
-		c.Redirect(http.StatusFound, "/swagger/index.html")
-	})
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	router.GET("/ping", func(c *gin.Context) { c.String(http.StatusOK, "OK") })
 
 	listeners, err := activation.Listeners()
 	if err != nil {
