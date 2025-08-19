@@ -22,9 +22,84 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func file(c *gin.Context) {
+	file := filepath.Base(c.Param("file"))
 
-
+	url, err := url.Parse("https://files.kde.org/kde-linux/")
+	if err != nil {
+		panic(err)
 	}
+
+	desync.Log.SetOutput(os.Stdout)
+
+	desync.Log.Warn("Requested file:", file)
+	desync.Log.Warn("Requested file:", c.Param("file"))
+
+	if filepath.Ext(file) != ".erofs" {
+		c.Redirect(http.StatusTemporaryRedirect, url.JoinPath(file).String())
+		return
+	}
+
+	remoteIndexStore, err := desync.NewRemoteHTTPIndexStore(url, desync.StoreOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	desync.Log.Warn("Using remote index store at", file)
+	remoteIndex, err := remoteIndexStore.GetIndex(file + ".caibx")
+	if err != nil {
+		panic(err)
+	}
+
+	erofses, err := filepath.Glob("/system/*.erofs")
+	if err != nil {
+		panic(err)
+	}
+
+	erofsStore, err := desync.NewLocalIndexStore("/system")
+	if err != nil {
+		panic(err)
+	}
+	defer erofsStore.Close()
+
+	seeds := []desync.Seed{}
+	for _, erofsPath := range erofses {
+		erofs := filepath.Base(erofsPath)
+		desync.Log.Warn("Using erofs as seed", erofs)
+
+		index, err := erofsStore.GetIndex(erofs + ".caibx")
+		if err != nil {
+			desync.Log.Warn("Failed to get index for", erofs, ":", err)
+			index, _, err = desync.IndexFromFile(c, erofsPath, 32, 16*1024, 64*1024, 256*1024, desync.NewProgressBar("Chunking "))
+			if err != nil {
+				desync.Log.Warn("Failed to create index for", erofs, ":", err)
+				continue
+			}
+		}
+
+		seed, err := NewIndexSeed("", erofsPath, index)
+		if err != nil {
+			desync.Log.Warn("Failed to create seed for", erofs, ":", err)
+			continue
+		}
+		seeds = append(seeds, seed)
+	}
+
+	assembler, err := stream(c, remoteIndex, NewHTTPSeed(url.JoinPath(file), remoteIndex), seeds, AssembleOptions{})
+	readClosers := assembler.Readers()
+	defer func() {
+		for _, rc := range readClosers {
+			rc.Close()
+		}
+	}()
+
+	readers := make([]io.Reader, len(readClosers))
+	for i, rc := range readClosers {
+		readers[i] = rc
+	}
+
+	c.DataFromReader(http.StatusOK, remoteIndex.Length(), "application/octet-stream",
+		io.MultiReader(readers...), map[string]string{})
 }
 
 func main() {
@@ -43,85 +118,7 @@ func main() {
 		e.ContextWithFallback = true
 	})
 
-	router.GET("/kde-linux/*file", func(c *gin.Context) {
-		file := filepath.Base(c.Param("file"))
-
-		url, err := url.Parse("https://files.kde.org/kde-linux/")
-		if err != nil {
-			panic(err)
-		}
-
-		desync.Log.SetOutput(os.Stdout)
-
-		desync.Log.Warn("Requested file:", file)
-		desync.Log.Warn("Requested file:", c.Param("file"))
-
-		if filepath.Ext(file) != ".erofs" {
-			c.Redirect(http.StatusTemporaryRedirect, url.JoinPath(file).String())
-			return
-		}
-
-		remoteIndexStore, err := desync.NewRemoteHTTPIndexStore(url, desync.StoreOptions{})
-		if err != nil {
-			panic(err)
-		}
-
-		desync.Log.Warn("Using remote index store at", file)
-		remoteIndex, err := remoteIndexStore.GetIndex(file + ".caibx")
-		if err != nil {
-			panic(err)
-		}
-
-		erofses, err := filepath.Glob("/system/*.erofs")
-		if err != nil {
-			panic(err)
-		}
-
-		erofsStore, err := desync.NewLocalIndexStore("/system")
-		if err != nil {
-			panic(err)
-		}
-		defer erofsStore.Close()
-
-		seeds := []desync.Seed{}
-		for _, erofsPath := range erofses {
-			erofs := filepath.Base(erofsPath)
-			desync.Log.Warn("Using erofs as seed", erofs)
-
-			index, err := erofsStore.GetIndex(erofs + ".caibx")
-			if err != nil {
-				desync.Log.Warn("Failed to get index for", erofs, ":", err)
-				index, _, err = desync.IndexFromFile(c, erofsPath, 32, 16*1024, 64*1024, 256*1024, desync.NewProgressBar("Chunking "))
-				if err != nil {
-					desync.Log.Warn("Failed to create index for", erofs, ":", err)
-					continue
-				}
-			}
-
-			seed, err := NewIndexSeed("", erofsPath, index)
-			if err != nil {
-				desync.Log.Warn("Failed to create seed for", erofs, ":", err)
-				continue
-			}
-			seeds = append(seeds, seed)
-		}
-
-		assembler, err := stream(c, remoteIndex, NewHTTPSeed(url.JoinPath(file), remoteIndex), seeds, AssembleOptions{})
-		readClosers := assembler.Readers()
-		defer func() {
-			for _, rc := range readClosers {
-				rc.Close()
-			}
-		}()
-
-		readers := make([]io.Reader, len(readClosers))
-		for i, rc := range readClosers {
-			readers[i] = rc
-		}
-
-		c.DataFromReader(http.StatusOK, remoteIndex.Length(), "application/octet-stream",
-			io.MultiReader(readers...), map[string]string{})
-	})
+	router.GET("/kde-linux/*file", file)
 
 	listeners, err := activation.Listeners()
 	if err != nil {
