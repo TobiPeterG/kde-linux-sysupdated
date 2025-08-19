@@ -8,7 +8,6 @@ Description=KDE Linux Update Service
 Type=simple
 Environment=GIN_MODE=release
 ExecStart=/usr/lib/kde-linux-sysupdated
-Restart=always
 
 [Install]
 WantedBy=default.target

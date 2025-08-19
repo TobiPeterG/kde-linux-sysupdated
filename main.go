@@ -117,6 +117,7 @@ func main() {
 	router := gin.Default(func(e *gin.Engine) {
 		e.ContextWithFallback = true
 	})
+	router.Use(activityTracker())
 
 	router.GET("/kde-linux/*file", file)
 
@@ -140,6 +141,11 @@ func main() {
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	go func() {
+		<-idleTimer.timer.C
+		quit <- syscall.SIGQUIT
+	}()
 
 	// Wait for some quit cause.
 	// This could be INT, TERM, QUIT or the db update trigger.
