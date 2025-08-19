@@ -36,7 +36,7 @@ func (it *IdleTimer) StopAndClaim() {
 	it.waiters++
 }
 
-var idleTime = 4 * time.Second
+var idleTime = 5 * time.Minute
 var idleTimer = &IdleTimer{
 	mu:    sync.Mutex{},
 	timer: time.NewTimer(idleTime),
