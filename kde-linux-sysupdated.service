@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# SPDX-FileCopyrightText: 2025 Harald Sitter <sitter@kde.org>
+
+[Unit]
+Description=KDE Linux Update Service
+
+[Service]
+Type=simple
+Environment=GIN_MODE=release
+ExecStart=/usr/lib/kde-linux-sysupdated
+Restart=always
+
+[Install]
+WantedBy=default.target
