@@ -10,8 +10,6 @@ test:
 	go test -v -coverpkg=./... -coverprofile=coverage.cov ./...
 
 kde-linux-sysupdated:
-	go install github.com/swaggo/swag/cmd/swag@latest
-	go generate
 	go build -o kde-linux-sysupdated -v
 
 install: kde-linux-sysupdated
