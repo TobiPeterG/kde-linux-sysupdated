@@ -23,17 +23,19 @@ import (
 )
 
 func file(c *gin.Context) {
-	file := filepath.Base(c.Param("file"))
+	fullpath := c.Param("file")
+	path := filepath.Dir(fullpath)
+	file := filepath.Base(fullpath)
 
-	url, err := url.Parse("https://files.kde.org/kde-linux/")
+	url, err := url.Parse("https://files.kde.org/" + path)
 	if err != nil {
 		panic(err)
 	}
 
 	desync.Log.SetOutput(os.Stdout)
 
-	desync.Log.Warn("Requested file:", file)
-	desync.Log.Warn("Requested file:", c.Param("file"))
+	desync.Log.Warn("Requested file:", fullpath)
+	desync.Log.Warn("Using URL:", url.String())
 
 	if filepath.Ext(file) != ".erofs" {
 		c.Redirect(http.StatusTemporaryRedirect, url.JoinPath(file).String())
