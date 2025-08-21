@@ -6,8 +6,7 @@ Description=KDE Linux Update Service
 
 [Socket]
 ListenStream=127.0.0.1:3129
-ExecStartPost=mkdir --parents /run/sysupdate.d/50-root-x86-64-erofs.conf.d
-ExecStartPost=sh -c 'echo "[Source]\nPath=http://127.0.0.1:3129/kde-linux\n" > /run/sysupdate.d/50-root-x86-64-erofs.conf.d/00-default.conf'
+ExecStartPost=/usr/lib/kde-linux-sysupdated-redirector
 ExecStopPre=rm --recursive --force /run/sysupdate.d/50-root-x86-64-erofs.conf.d/00-default.conf
 
 [Install]

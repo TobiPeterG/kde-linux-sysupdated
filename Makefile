@@ -5,6 +5,7 @@ all: kde-linux-sysupdated
 
 clean:
 	rm -rf kde-linux-sysupdated
+	rm -rf kde-linux-sysupdated-redirector
 
 test:
 	go test -v -coverpkg=./... -coverprofile=coverage.cov ./...
@@ -12,8 +13,12 @@ test:
 kde-linux-sysupdated:
 	go build -o kde-linux-sysupdated -v
 
-install: kde-linux-sysupdated
+kde-linux-sysupdated-redirector:
+	go build -o kde-linux-sysupdated-redirector -v ./redirector
+
+install: kde-linux-sysupdated kde-linux-sysupdated-redirector
 	install -Dm755 kde-linux-sysupdated ${DESTDIR}/usr/lib/kde-linux-sysupdated
+	install -Dm755 kde-linux-sysupdated-redirector ${DESTDIR}/usr/lib/kde-linux-sysupdated-redirector
 	install -Dm644 kde-linux-sysupdated.service ${DESTDIR}/usr/lib/systemd/system/kde-linux-sysupdated.service
 	install -Dm644 kde-linux-sysupdated.socket ${DESTDIR}/usr/lib/systemd/system/kde-linux-sysupdated.socket
 
