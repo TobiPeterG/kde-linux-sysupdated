@@ -27,7 +27,8 @@ func file(c *gin.Context) {
 	path := filepath.Dir(fullpath)
 	file := filepath.Base(fullpath)
 
-	url, err := url.Parse("https://files.kde.org/" + path)
+	// Mind that we are underneath a /kde-linux/ endpoint so our input path is always implicitly prefixed with that.
+	url, err := url.Parse("https://files.kde.org/kde-linux/" + path)
 	if err != nil {
 		panic(err)
 	}
