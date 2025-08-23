@@ -90,6 +90,10 @@ func file(c *gin.Context) {
 	}
 
 	assembler, err := stream(c, remoteIndex, NewHTTPSeed(url.JoinPath(file), remoteIndex), seeds, AssembleOptions{})
+	if err != nil {
+		desync.Log.Error("Failed to create stream:", err)
+		panic(err)
+	}
 	readClosers := assembler.Readers()
 	defer func() {
 		for _, rc := range readClosers {
