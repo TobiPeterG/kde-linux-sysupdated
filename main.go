@@ -73,7 +73,8 @@ func file(c *gin.Context) {
 		index, err := erofsStore.GetIndex(erofs + ".caibx")
 		if err != nil {
 			desync.Log.Warn("Failed to get index for", erofs, ":", err)
-			index, _, err = desync.IndexFromFile(c, erofsPath, 32, 16*1024, 64*1024, 256*1024, desync.NewProgressBar("Chunking "))
+			// FIXME hardcoed 32
+			index, _, err = desync.IndexFromFile(c, erofsPath, 32, remoteIndex.Index.ChunkSizeMin, remoteIndex.Index.ChunkSizeAvg, remoteIndex.Index.ChunkSizeMax, desync.NewProgressBar("Chunking "))
 			if err != nil {
 				desync.Log.Warn("Failed to create index for", erofs, ":", err)
 				continue
