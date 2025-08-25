@@ -22,6 +22,31 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// PrepareReaders can prepare subsequent readers in advance. This notably
+// helps offset HTTP latency by issuing the requests ahead of time.
+// We wrap all our LazyReaders in PrepareReaders and then activate them by
+// doing empty reads on them. This spins up the HTTP request in advance with
+// the hope that by the time we actually need to read from them, the request
+type PrepareReader struct {
+	io.Reader
+	Next1 *PrepareReader
+	Next2 *PrepareReader
+}
+
+func (pr PrepareReader) Read(p []byte) (n int, err error) {
+	if len(p) != 0 { // Only prepare if we aren't getting prepared ourself.
+		pr.Next1.Prepare()
+		pr.Next2.Prepare()
+	}
+
+	return pr.Reader.Read(p)
+}
+
+func (pr *PrepareReader) Prepare() error {
+	_, err := pr.Read([]byte{}) // Empty read to trigger the LazyReader
+	return err
+}
+
 func file(c *gin.Context) {
 	fullpath := c.Param("file")
 	path := filepath.Dir(fullpath)
@@ -94,6 +119,7 @@ func file(c *gin.Context) {
 		desync.Log.Error("Failed to create stream:", err)
 		panic(err)
 	}
+	// NOTE: this returns LazyReaders! The lazy readers only open the internal reader when Read() is called!
 	readClosers := assembler.Readers()
 	defer func() {
 		for _, rc := range readClosers {
@@ -101,9 +127,19 @@ func file(c *gin.Context) {
 		}
 	}()
 
-	readers := make([]io.Reader, len(readClosers))
+	prepareReaders := make([]*PrepareReader, len(readClosers))
 	for i, rc := range readClosers {
-		readers[i] = rc
+		prepareReaders[i] = &PrepareReader{Reader: rc, Next1: nil, Next2: nil}
+	}
+
+	for i, pr := range prepareReaders {
+		pr.Next1 = prepareReaders[(i+1)%len(prepareReaders)]
+		pr.Next2 = prepareReaders[(i+2)%len(prepareReaders)]
+	}
+
+	readers := make([]io.Reader, len(prepareReaders))
+	for i, pr := range prepareReaders {
+		readers[i] = pr
 	}
 
 	c.DataFromReader(http.StatusOK, remoteIndex.Length(), "application/octet-stream",
