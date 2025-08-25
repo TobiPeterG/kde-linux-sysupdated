@@ -27,6 +27,7 @@ import (
 // We wrap all our LazyReaders in PrepareReaders and then activate them by
 // doing empty reads on them. This spins up the HTTP request in advance with
 // the hope that by the time we actually need to read from them, the request
+// has received data already.
 type PrepareReader struct {
 	io.Reader
 	Next1 *PrepareReader
