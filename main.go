@@ -70,6 +70,20 @@ func file(c *gin.Context) {
 		return
 	}
 
+	resp, err := http.DefaultClient.Head(url.JoinPath(file + ".caibx").String())
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		c.String(resp.StatusCode, "Upstream responded with %d", resp.StatusCode)
+		return
+	}
+	url = resp.Request.URL
+	url.Path = filepath.Dir(url.Path) // Use the final redirected URL base path
+
+	desync.Log.Warn("Redirecting to URL: ", url.String())
+
 	remoteIndexStore, err := desync.NewRemoteHTTPIndexStore(url, desync.StoreOptions{})
 	if err != nil {
 		panic(err)
