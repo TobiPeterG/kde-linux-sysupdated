@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -172,6 +173,35 @@ func file(c *gin.Context) {
 	// a transfer broke.
 }
 
+func updateSize(ctx *gin.Context) {
+	version := ctx.Query("version")
+	if version == "" {
+		ctx.String(http.StatusBadRequest, "version parameter not set")
+		return
+	}
+
+	updateSizer := NewUpdateSizer(version)
+	context := updateSizer.PrepareContext()
+
+	size, err := globalCache.GetUpdateSize(context)
+	if err == os.ErrNotExist { // no cache hit
+		size, err = updateSizer.Calculate(ctx)
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, "Failed to calculate size: %s", err)
+			return
+		}
+
+		globalCache.SetUpdateSize(size, context)
+	} else if err != nil {
+		ctx.String(http.StatusInternalServerError, "Failed to update size: %s", err)
+		return
+	}
+
+	ctx.String(http.StatusOK, strconv.FormatUint(size, 10))
+}
+
+var globalCache Cache
+
 func main() {
 	flag.Parse()
 
@@ -183,6 +213,9 @@ func main() {
 	}
 	defer sentry.Flush(2 * time.Second)
 
+	globalCache = LoadCache("/run/kde-linux-sysupdated/globalCache.json")
+	defer globalCache.sync()
+
 	log.Println("Ready to rumble...")
 	router := gin.Default(func(e *gin.Engine) {
 		e.ContextWithFallback = true
@@ -190,6 +223,7 @@ func main() {
 	router.Use(activityTracker())
 
 	router.GET("/kde-linux/*file", file)
+	router.GET("/v1/updatesize", updateSize)
 
 	listeners, err := activation.Listeners()
 	if err != nil {
