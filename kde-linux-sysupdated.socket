@@ -7,7 +7,7 @@ Description=KDE Linux Update Service
 [Socket]
 ListenStream=127.0.0.1:3129
 ExecStartPost=/usr/lib/kde-linux-sysupdated-redirector
-ExecStopPre=rm --recursive --force /run/sysupdate.d/50-root-x86-64-erofs.conf.d/00-default.conf
+ExecStopPre=rm --recursive --force /run/sysupdate.d/50-root-x86-64-erofs.transfer.d/00-default.conf
 
 [Install]
 WantedBy=sockets.target

@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	origFile := "/usr/lib/sysupdate.d/50-root-x86-64-erofs.conf"
+	origFile := "/usr/lib/sysupdate.d/50-root-x86-64-erofs.transfer"
 	if _, err := os.Stat(origFile); err != nil {
 		log.Fatalln(err)
 	}
@@ -50,7 +50,7 @@ func main() {
 
 	newOption := unit.NewUnitOption("Source", "Path", newPath)
 
-	overrideDir := "/run/sysupdate.d/50-root-x86-64-erofs.conf.d"
+	overrideDir := "/run/sysupdate.d/50-root-x86-64-erofs.transfer.d"
 	os.MkdirAll(overrideDir, 0755)
 
 	outFile, err := os.Create(overrideDir + "/00-default.conf")
