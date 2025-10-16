@@ -167,6 +167,9 @@ func file(c *gin.Context) {
 
 	c.DataFromReader(http.StatusOK, remoteIndex.Length(), "application/octet-stream",
 		io.MultiReader(readers...), map[string]string{})
+
+	// Mind that gin will print c.Errors, so we don't need to print them manually to see why
+	// a transfer broke.
 }
 
 func main() {
