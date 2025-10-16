@@ -82,7 +82,25 @@ func (r *SeedSequencer) Plan() (plan Plan) {
 		}
 	}
 
-	desync.Log.Warnf("Plan with holes: %d segments for %d chunks", len(plan), len(r.index.Chunks))
+	{ // debugging
+		fromLocal := 0
+		fromLocalSize := uint64(0)
+		fromRemote := 0
+		fromRemoteSize := uint64(0)
+
+		for _, s := range plan {
+			if s.source.FileName() != "" { // local seeds always have a filename
+				fromLocal += 1
+				fromLocalSize += s.indexSegment.lengthBytes()
+			} else {
+				fromRemote += 1
+				fromRemoteSize += s.indexSegment.lengthBytes()
+			}
+		}
+
+		desync.Log.Warnf("Plan with holes: %d segments for %d chunks", len(plan), len(r.index.Chunks))
+		desync.Log.Warnf("Local %d MiB; %d segments | Remote %d MiB; %d segments", fromLocalSize/1024/1024, fromLocal, fromRemoteSize/1024/1024, fromRemote)
+	}
 
 	return plan
 }
