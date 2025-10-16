@@ -146,13 +146,13 @@ func (s *httpSeedSegment) Reader() (reader io.ReadCloser, err error) {
 	request, err := http.NewRequest("GET", s.location.String(), nil)
 	if err != nil {
 		desync.Log.Errorf("Failed to create request for chunk %s: %v", s.chunks[0].ID, err)
-		return nil, err
+		return nil, fmt.Errorf("Failed to create request for chunk %s: %v", s.chunks[0].ID, err)
 	}
 	request.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", segmentStart, segmentEnd))
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Client.Do failed [%v]: %v", request, err)
 	}
 
 	if response.StatusCode != http.StatusPartialContent {
