@@ -125,14 +125,11 @@ func (r *SeedSequencer) Next() (seed desync.Seed, segment IndexSegment, source d
 	}
 
 	if source == nil {
-		desync.Log.Warnf("No match found for %d chunks at %d", advance, r.current)
-
 		// found no match at all. look for the first possible match in our storeSeed.
 		// The expectation here is that we will find a match in the storeSeed.
 		// We'll want to have the largest contiguous segment between here and the next viable seed segment.
 		nextSegmentAt := -1
 		for index, _ := range r.index.Chunks[r.current:] {
-			// desync.Log.Warnf("Checking segment %d at %d", index, r.current+index)
 			chunkIndex := r.current + index
 			for _, s := range r.seeds {
 				_, source := s.LongestMatchWith(r.index.Chunks[chunkIndex:])
@@ -142,12 +139,9 @@ func (r *SeedSequencer) Next() (seed desync.Seed, segment IndexSegment, source d
 				}
 			}
 			if nextSegmentAt != -1 {
-				desync.Log.Warnf("Next segment found at %d", nextSegmentAt)
 				break
 			}
 		}
-
-		desync.Log.Warnf("Next segment at %d out of a total of %d chunks", nextSegmentAt, len(r.index.Chunks))
 
 		if nextSegmentAt == -1 {
 			// Load the rest out of the storeSeed
