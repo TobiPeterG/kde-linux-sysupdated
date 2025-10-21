@@ -81,7 +81,6 @@ func (s *HTTPSeed) LongestMatchWith(chunks []desync.IndexChunk) (int, desync.See
 		limit int
 	)
 	limit = 0
-	desync.Log.Warnf("Longest lens %d -- %d", len(chunks), len(s.index.Chunks))
 	for _, p := range pos {
 		m := s.maxMatchFrom(chunks, p, limit)
 		if len(m) > max {
@@ -92,7 +91,6 @@ func (s *HTTPSeed) LongestMatchWith(chunks []desync.IndexChunk) (int, desync.See
 			break
 		}
 	}
-	desync.Log.Warn("Longest match found for", chunks[0].ID, ":", max, "chunks")
 	return max, newHTTPSeedSegment(s.location, match)
 }
 
