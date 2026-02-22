@@ -10,6 +10,7 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spatialcurrent/go-lazy v0.0.0-20211115014721-47315cc003d1
 	golang.org/x/sync v0.16.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -25,6 +26,7 @@ require (
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/dchest/siphash v1.2.3 // indirect
 	github.com/folbricht/tempfile v0.0.1 // indirect
+	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
@@ -75,5 +77,4 @@ require (
 	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/cheggaaa/pb.v1 v1.0.28 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

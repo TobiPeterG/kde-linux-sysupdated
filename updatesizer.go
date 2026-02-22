@@ -121,7 +121,8 @@ func (u *UpdateSizer) Calculate(ctx context.Context) (uint64, error) {
 
 	log.Println("Calculating update size with", len(u.seeds), "seeds")
 
-	assembler, err := stream(ctx, u.remoteIndex, u.remoteSeed, u.seeds, AssembleOptions{})
+	var store desync.Store = nil // We don't actually need a store here, the requests come from remote anyway.
+	assembler, err := stream(ctx, u.remoteIndex, u.remoteSeed, store, u.seeds, AssembleOptions{})
 	if err != nil {
 		desync.Log.Error("Failed to create stream:", err)
 		panic(err)
