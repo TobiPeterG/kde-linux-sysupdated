@@ -59,7 +59,7 @@ func (a *Assembler) Readers() (readers []io.ReadCloser) {
 			continue
 		}
 
-		desync.Log.Error("Segment source is not a ReaderReader", segment.source)
+		desync.Log.Error("Segment source is not a ReaderReader ", segment.source)
 		panic("Segment source is not a ReaderReader")
 	}
 
@@ -80,7 +80,7 @@ func stream(ctx context.Context, idx desync.Index, storeSeed desync.Seed, seeds 
 	seq := NewSeedSequencer(idx, storeSeed, seeds...)
 	plan := seq.Plan()
 	for {
-		validatingPrefix := fmt.Sprintf("Attempt %d: Validating ", attempt)
+		validatingPrefix := fmt.Sprintf("Attempt %d: Validating", attempt)
 		if err := plan.Validate(ctx, 1, desync.NewProgressBar(validatingPrefix)); err != nil {
 			// This plan has at least one invalid seed
 			switch options.InvalidSeedAction {

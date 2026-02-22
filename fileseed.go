@@ -83,7 +83,7 @@ func (s *FileSeed) LongestMatchWith(chunks []desync.IndexChunk) (int, desync.See
 }
 
 func (s *FileSeed) RegenerateIndex(ctx context.Context, n int, attempt int, seedNumber int) error {
-	chunkingPrefix := fmt.Sprintf("Attempt %d: Chunking Seed %d ", attempt, seedNumber)
+	chunkingPrefix := fmt.Sprintf("Attempt %d: Chunking Seed %d", attempt, seedNumber)
 	index, _, err := desync.IndexFromFile(ctx, s.srcFile, n, s.index.Index.ChunkSizeMin, s.index.Index.ChunkSizeAvg,
 		s.index.Index.ChunkSizeMax, desync.NewProgressBar(chunkingPrefix))
 	if err != nil {
