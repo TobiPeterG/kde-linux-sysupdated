@@ -56,17 +56,17 @@ func (u *UpdateSizer) PrepareContext() []string {
 		u.Context = append(u.Context, erofsPath)
 
 		erofs := filepath.Base(erofsPath)
-		desync.Log.Warn("Using erofs as seed", erofs)
+		desync.Log.Warn("Using erofs as seed ", erofs)
 
 		index, err := erofsStore.GetIndex(erofs + ".caibx")
 		if err != nil {
-			desync.Log.Warn("Failed to get index for", erofs, ":", err)
+			desync.Log.Warn("Failed to get index for ", erofs, ": ", err)
 			continue
 		}
 
 		seed, err := NewIndexSeed("", erofsPath, index)
 		if err != nil {
-			desync.Log.Warn("Failed to create seed for", erofs, ":", err)
+			desync.Log.Warn("Failed to create seed for ", erofs, ": ", err)
 			continue
 		}
 		u.seeds = append(u.seeds, seed)
@@ -99,7 +99,7 @@ func (u *UpdateSizer) prepareRemote() error {
 		return fmt.Errorf("failed to create remote index store: %w", err)
 	}
 
-	desync.Log.Warn("Using remote index store at", file)
+	desync.Log.Warn("Using remote index store at ", file)
 	u.remoteIndex, err = remoteIndexStore.GetIndex(file + ".caibx")
 	if err != nil {
 		return fmt.Errorf("failed to get remote index: %w", err)
@@ -119,11 +119,11 @@ func (u *UpdateSizer) Calculate(ctx context.Context) (uint64, error) {
 		return 0, fmt.Errorf("failed to prepare remote: %w", err)
 	}
 
-	log.Println("Calculating update size with", len(u.seeds), "seeds")
+	log.Println("Calculating update size with ", len(u.seeds), "seeds")
 
 	assembler, err := stream(ctx, u.remoteIndex, u.remoteSeed, u.seeds, AssembleOptions{})
 	if err != nil {
-		desync.Log.Error("Failed to create stream:", err)
+		desync.Log.Error("Failed to create stream: ", err)
 		panic(err)
 	}
 
@@ -134,7 +134,7 @@ func (u *UpdateSizer) Calculate(ctx context.Context) (uint64, error) {
 		}
 	}
 
-	fmt.Println("Calculated update size:", size)
+	fmt.Println("Calculated update size: ", size)
 
 	return size, nil
 }

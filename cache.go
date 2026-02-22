@@ -24,19 +24,19 @@ func LoadCache(path string) Cache {
 
 	err := os.Mkdir(filepath.Dir(path), 0700)
 	if err != nil && !os.IsExist(err) {
-		log.Println("Failed to create cache directory, cache will not be able to persist to disk", err)
+		log.Println("Failed to create cache directory, cache will not be able to persist to disk: ", err)
 		return cache
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		log.Println("Cache doesn't exist yet, creating it", err)
+		log.Println("Cache doesn't exist yet, creating it: ", err)
 		return cache
 	}
 
 	err = json.Unmarshal(data, &cache)
 	if err != nil {
-		log.Println("Failed to unmarshal cache, re-creating it", err)
+		log.Println("Failed to unmarshal cache, re-creating it: ", err)
 		return cache
 	}
 	return cache
@@ -45,13 +45,13 @@ func LoadCache(path string) Cache {
 func (c *Cache) sync() {
 	data, err := json.Marshal(c)
 	if err != nil {
-		log.Println("Failed to marshal cache, not saving to disk", err)
+		log.Println("Failed to marshal cache, not saving to disk: ", err)
 		return
 	}
 
 	err = os.WriteFile(c.path, data, 0600)
 	if err != nil {
-		log.Println("Failed to write cache to disk", err)
+		log.Println("Failed to write cache to disk: ", err)
 		return
 	}
 }
