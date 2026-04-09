@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -15,11 +16,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/coreos/go-systemd/activation"
 	"github.com/folbricht/desync"
+	"github.com/fsnotify/fsnotify"
 	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
 )
@@ -31,15 +34,15 @@ import (
 // the hope that by the time we actually need to read from them, the request
 // has received data already.
 type PrepareReader struct {
-	io.Reader
-	Next1 *PrepareReader
-	Next2 *PrepareReader
+	Reader io.Reader
+	Next   []*PrepareReader
 }
 
 func (pr PrepareReader) Read(p []byte) (n int, err error) {
 	if len(p) != 0 { // Only prepare if we aren't getting prepared ourself.
-		pr.Next1.Prepare()
-		pr.Next2.Prepare()
+		for _, next := range pr.Next {
+			next.Prepare()
+		}
 	}
 
 	return pr.Reader.Read(p)
@@ -48,6 +51,120 @@ func (pr PrepareReader) Read(p []byte) (n int, err error) {
 func (pr *PrepareReader) Prepare() error {
 	_, err := pr.Read([]byte{}) // Empty read to trigger the LazyReader
 	return err
+}
+
+func getTargetUrl(url *url.URL) (*url.URL, error) {
+	resp, err := http.DefaultClient.Head(url.String())
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get target URL: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Upstream for EROFS index responded with %d", resp.StatusCode)
+	}
+	targetURL := resp.Request.URL
+	targetURL.Path = filepath.Dir(targetURL.Path) // Use the final redirected URL base path
+	return targetURL, nil
+}
+
+type URLType int
+
+const (
+	UnknownURLType URLType = iota
+	OriginURLType
+	CDNURLType
+	MirrorURLType
+)
+
+type HTTPContext struct {
+	URLType URLType
+	Cached  bool
+}
+
+func newHTTPContext(url *url.URL) (HTTPContext, error) {
+	host := strings.ToLower(url.Hostname())
+	if strings.HasSuffix(host, "kde.org") {
+		return HTTPContext{URLType: OriginURLType, Cached: false}, nil
+	}
+
+	resp, err := http.DefaultClient.Head(url.String())
+	if err != nil {
+		return HTTPContext{URLType: UnknownURLType, Cached: false}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return HTTPContext{URLType: UnknownURLType, Cached: false}, fmt.Errorf("Upstream for EROFS responded with %d", resp.StatusCode)
+	}
+	if resp.Header.Get("X-77-Cache") != "" {
+		cached := strings.EqualFold(resp.Header.Get("X-77-Cache"), "HIT")
+		return HTTPContext{URLType: CDNURLType, Cached: cached}, nil
+	}
+	return HTTPContext{URLType: MirrorURLType, Cached: true}, nil
+}
+
+func openStoreForHTTPContext(ctx HTTPContext, url *url.URL) (desync.Store, error) {
+	if !globalConfig.EnableStore {
+		log.Println("Store is disabled by configuration")
+		return nil, nil
+	}
+	log.Println("Opening store for HTTP context:", ctx)
+
+	makeStore := false
+	// Things get even more complicated here. We want to have the assembler do as few requests as possible.
+	// But that means we need to know if a request is likely to be slow or not. So... here we go
+	switch ctx.URLType {
+	case OriginURLType:
+		// We are talking to a KDE server. They will have all the data but not necessarily at the speed we want.
+		makeStore = true
+	case CDNURLType:
+		// We are talking to a CDN.
+		if ctx.Cached {
+			// If the data is cached here we can quickly access large chunks of data at good speeds. Perfect!
+			// Nothing to do. We'll fall into the erofs seed and make range requests against it.
+		} else {
+			// If it is not cached we will want to make requests to the chunk store. We will need more requests but
+			// the latency will be better as each request will need to round-trip to the origin.
+			// If we requested against the erofs seed here we'd first have to wait for the CDN to stream the entire
+			// file into cache.
+			makeStore = true
+		}
+	case MirrorURLType:
+		// We are talking to a mirror. This is in a way the best case. If we got here the mirror already has the entire
+		// erofs cached and we can access large chunks of data at good speeds.
+		// Nothing to do. We'll fall into the erofs seed and make range requests against it.
+	case UnknownURLType:
+		// We have no idea what we are talking to. Be pessimistic about it and use the chunk store.
+		makeStore = true
+	}
+
+	if globalConfig.ForceStore {
+		log.Println("Store usage is forced by configuration")
+		makeStore = true
+	}
+
+	if makeStore {
+		// TODO: should probably configure/detect this somehow by asking a server where the store is.
+		storeURL, err := url.Parse("https://storage.kde.org/kde-linux/sysupdate/store")
+		if err != nil {
+			desync.Log.Error("Failed to parse store URL:", err)
+			panic(err)
+		}
+		store, err := desync.NewRemoteHTTPStore(storeURL, desync.NewStoreOptionsWithDefaults())
+		if err != nil {
+			desync.Log.Error("Failed to create remote HTTP store:", err)
+			panic(err)
+		}
+
+		localStore, err := desync.NewLocalStore("/tmp/kde-linux-sysupdate-store", desync.NewStoreOptionsWithDefaults())
+		if err != nil {
+			desync.Log.Error("Failed to create local store:", err)
+			return nil, err
+		}
+
+		return desync.NewCache(store, localStore), nil
+	}
+
+	return nil, nil
 }
 
 func file(c *gin.Context) {
@@ -71,33 +188,37 @@ func file(c *gin.Context) {
 		return
 	}
 
-	resp, err := http.DefaultClient.Head(url.JoinPath(file + ".caibx").String())
+	// We make a bunch of HEAD requests to figure out what we are dealing with,
+	// should be fast enough for this critical section of processing!
+	url, err = getTargetUrl(url.JoinPath(file + ".caibx"))
 	if err != nil {
-		panic(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		c.String(resp.StatusCode, "Upstream responded with %d", resp.StatusCode)
+		c.String(http.StatusInternalServerError, "Failed to get target URL: %s", err)
 		return
 	}
-	url = resp.Request.URL
-	url.Path = filepath.Dir(url.Path) // Use the final redirected URL base path
-
 	desync.Log.Warn("Redirecting to URL: ", url.String())
+
+	httpContext, err := newHTTPContext(url.JoinPath(file))
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to get URL type: %s", err)
+		return
+	}
 
 	remoteIndexStore, err := desync.NewRemoteHTTPIndexStore(url, desync.StoreOptions{})
 	if err != nil {
+		desync.Log.Warn("Failed to create remote index store: ", err)
 		panic(err)
 	}
 
 	desync.Log.Warn("Using remote index store at", file)
 	remoteIndex, err := remoteIndexStore.GetIndex(file + ".caibx")
 	if err != nil {
+		desync.Log.Warn("Failed to get index for", file, ":", err)
 		panic(err)
 	}
 
 	erofses, err := filepath.Glob("/system/*.erofs")
 	if err != nil {
+		desync.Log.Warn("Failed to glob for erofses: ", err)
 		panic(err)
 	}
 
@@ -138,7 +259,22 @@ func file(c *gin.Context) {
 		seeds = append(seeds, seed)
 	}
 
-	assembler, err := stream(c, remoteIndex, NewHTTPSeed(url.JoinPath(file), remoteIndex), seeds, AssembleOptions{})
+	store, err := openStoreForHTTPContext(httpContext, url.JoinPath(file))
+	if err != nil {
+		desync.Log.Error("Failed to open stores for HTTP context:", err)
+		panic(err)
+	}
+	defer func() {
+		if store == nil {
+			return
+		}
+
+		if err := store.Close(); err != nil {
+			desync.Log.Error("Failed to close store:", err)
+		}
+	}()
+
+	assembler, err := stream(c, remoteIndex, NewHTTPSeed(url.JoinPath(file), remoteIndex), store, seeds, AssembleOptions{})
 	if err != nil {
 		desync.Log.Error("Failed to create stream:", err)
 		panic(err)
@@ -151,14 +287,22 @@ func file(c *gin.Context) {
 		}
 	}()
 
+	desync.Log.Debugln("Read closers created")
+
 	prepareReaders := make([]*PrepareReader, len(readClosers))
 	for i, rc := range readClosers {
-		prepareReaders[i] = &PrepareReader{Reader: rc, Next1: nil, Next2: nil}
+		prepareReaders[i] = &PrepareReader{Reader: rc, Next: []*PrepareReader{}} // we'll fill Next later
 	}
 
 	for i, pr := range prepareReaders {
-		pr.Next1 = prepareReaders[(i+1)%len(prepareReaders)]
-		pr.Next2 = prepareReaders[(i+2)%len(prepareReaders)]
+		preparationCount := 2
+		if store != nil {
+			preparationCount = 90
+		}
+		for j := 0; j < preparationCount; j++ {
+			next := prepareReaders[(i+j)%len(prepareReaders)]
+			pr.Next = append(pr.Next, next)
+		}
 	}
 
 	readers := make([]io.Reader, len(prepareReaders))
@@ -201,6 +345,7 @@ func updateSize(ctx *gin.Context) {
 }
 
 var globalCache Cache
+var globalConfig Config
 
 func main() {
 	flag.Parse()
@@ -215,6 +360,40 @@ func main() {
 
 	globalCache = LoadCache("/run/kde-linux-sysupdated/globalCache.json")
 	defer globalCache.sync()
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer watcher.Close()
+
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				log.Println("event:", event)
+				if event.Has(fsnotify.Write) && event.Name == DefaultConfigPath {
+					log.Println("Reloading config due to write event")
+					// Technically subject to a thread race but in practice the config isn't meant to change much at all.
+					globalConfig = LoadConfig(DefaultConfigPath)
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Println("fsnotify error:", err)
+			}
+		}
+	}()
+
+	globalConfig = LoadConfig(DefaultConfigPath)
+	err = watcher.Add(DefaultConfigPath)
+	if err != nil {
+		log.Println("Failed to watch config file:", err)
+	}
 
 	log.Println("Ready to rumble...")
 	router := gin.Default(func(e *gin.Engine) {

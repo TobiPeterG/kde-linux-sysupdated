@@ -31,7 +31,8 @@ type AssembleOptions struct {
 }
 
 type Assembler struct {
-	plan Plan
+	plan  Plan
+	store desync.Store
 }
 
 type ReaderReader interface {
@@ -39,11 +40,22 @@ type ReaderReader interface {
 }
 
 func (a *Assembler) Readers() (readers []io.ReadCloser) {
-	readers = make([]io.ReadCloser, len(a.plan))
-	for i, segment := range a.plan {
+	for _, segment := range a.plan {
 		if segment.source == nil {
 			desync.Log.Error("Segment source is nil", segment)
 			panic("Segment source is nil")
+		}
+
+		if a.store != nil && segment.source.FileName() == "" { // if we have a store prefer that over the http seed
+			desync.Log.Debug("Getting chunk from store for segment ", len(segment.indexSegment.chunks()), " chunks")
+			for _, chunk := range segment.indexSegment.chunks() {
+				reader := &ChunkReader{
+					store:      a.store,
+					indexChunk: chunk,
+				}
+				readers = append(readers, reader)
+			}
+			continue
 		}
 
 		if readerSegment, ok := segment.source.(ReaderReader); ok {
@@ -55,7 +67,7 @@ func (a *Assembler) Readers() (readers []io.ReadCloser) {
 				}
 				return reader, nil
 			})
-			readers[i] = reader
+			readers = append(readers, reader)
 			continue
 		}
 
@@ -63,10 +75,14 @@ func (a *Assembler) Readers() (readers []io.ReadCloser) {
 		panic("Segment source is not a ReaderReader")
 	}
 
+	if len(readers) == 0 {
+		desync.Log.Warn("No readers created for assembler plan")
+	}
+	desync.Log.Debugf("Created %d readers for assembler plan", len(readers))
 	return readers
 }
 
-func stream(ctx context.Context, idx desync.Index, storeSeed desync.Seed, seeds []desync.Seed, options AssembleOptions) (*Assembler, error) {
+func stream(ctx context.Context, idx desync.Index, storeSeed desync.Seed, store desync.Store, seeds []desync.Seed, options AssembleOptions) (*Assembler, error) {
 	type Job struct {
 		segment IndexSegment
 		source  desync.SeedSegment
@@ -108,7 +124,8 @@ func stream(ctx context.Context, idx desync.Index, storeSeed desync.Seed, seeds 
 	}
 
 	return &Assembler{
-		plan: plan,
+		plan:  plan,
+		store: store,
 	}, nil
 
 }

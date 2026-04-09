@@ -22,7 +22,7 @@ func LoadCache(path string) Cache {
 		path: path,
 	}
 
-	err := os.Mkdir(filepath.Dir(path), 0700)
+	err := os.Mkdir(filepath.Dir(path), 0755)
 	if err != nil && !os.IsExist(err) {
 		log.Println("Failed to create cache directory, cache will not be able to persist to disk: ", err)
 		return cache
