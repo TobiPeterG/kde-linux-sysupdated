@@ -142,6 +142,9 @@ func openStoreForHTTPContext(ctx HTTPContext, url *url.URL) (desync.Store, error
 		makeStore = true
 	}
 
+	log.Println("HTTP URL type:", ctx.URLType)
+	log.Println("Store usage decision:", makeStore)
+
 	if makeStore {
 		// TODO: should probably configure/detect this somehow by asking a server where the store is.
 		storeURL, err := url.Parse("https://storage.kde.org/kde-linux/sysupdate/store")
