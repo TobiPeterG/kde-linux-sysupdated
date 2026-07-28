@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -232,20 +231,8 @@ func file(c *gin.Context) {
 
 		index, err := erofsStore.GetIndex(erofs + ".caibx")
 		if err != nil {
-			desync.Log.Warn("Failed to get index for", erofs, ":", err)
-			index, _, err = desync.IndexFromFile(
-				c,
-				erofsPath,
-				runtime.NumCPU(),
-				remoteIndex.Index.ChunkSizeMin,
-				remoteIndex.Index.ChunkSizeAvg,
-				remoteIndex.Index.ChunkSizeMax,
-				desync.NewProgressBar("Chunking "),
-			)
-			if err != nil {
-				desync.Log.Warn("Failed to create index for", erofs, ":", err)
-				continue
-			}
+			desync.Log.Warnln("Failed to get index for", erofs, ":", err)
+			continue
 		}
 
 		seed, err := NewIndexSeed("", erofsPath, index)
